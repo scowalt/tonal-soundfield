@@ -1,10 +1,12 @@
 OscRecv recv;
 6449 => recv.port;
 recv.listen();
-recv.event( "/root/type, i i" ) @=> OscEvent @ oe;
+recv.event( "/key/root/type, i i i" ) @=> OscEvent @ oe;
 
+// key is an integer MIDI note value (e.g., C is 0, C# is 1, etc.)
 // root is an integer MIDI note value (e.g., C is 0, C# is 1, etc.)
 // type is an integer (0 = major, 1 = minor)
+
 
 0 => int key;
 0 => int root;
@@ -14,6 +16,7 @@ recv.event( "/root/type, i i" ) @=> OscEvent @ oe;
 4 => int numSynths;
 0 => int activeSynth;
 0 => int lfoTime;
+30 => int noteDistance;
 [ [ [0, 2, 4, 5, 7, 9, 11, 12],
     [1, 5, 8, 13],
     [0, 2, 4, 6, 9, 12, 14],
@@ -45,11 +48,21 @@ TriOsc bassTone => NRev bassRev => LPF bassLp => dac;
 0.2 => bassRev.mix;
 3 => bassLp.Q;
 
-PRCRev rev;
-0.4 => rev.mix;
-rev => dac;
+PRCRev lrev;
+LPF lmasterLP;
+0.6 => lrev.mix;
+2000 => lmasterLP.freq;
+1 => lmasterLP.Q;
+lrev => lmasterLP => dac.left;
 
-SqrOsc osc[numSynths];
+PRCRev rrev;
+LPF rmasterLP;
+0.6 => rrev.mix;
+2000 => rmasterLP.freq;
+1 => rmasterLP.Q;
+rrev => rmasterLP => dac.right;
+
+TriOsc osc[numSynths];
 ADSR env[numSynths];
 LPF lp[numSynths];
 Pan2 oscPan[numSynths];
@@ -60,6 +73,7 @@ fun void oscGetChord(){
 	while(true){
 		oe => now;
 		while(oe.nextMsg()){
+			oe.getInt() % 12 => key;
 			oe.getInt() % 12 => root;
 			oe.getInt() => type;
 			bassTone.freq() => float currentFreq;
@@ -75,50 +89,57 @@ fun void oscGetChord(){
 fun void chordLfo(){
 	while(true){
 		for(0 => int i; i < numSynths; i++){
-			lfoDepth[i] * Math.sin(lfoTime / lfoSpeed[i]) + 800 => lp[i].freq;
+			(lfoDepth[i] * Math.sin(lfoTime / lfoSpeed[i])) + 800 => lp[i].freq;
 		}
 		lfoTime++;
-		1::ms => now;
+		10::ms => now;
 	}
 }
 
 for(0 => int i; i < numSynths; i++){
-	osc[i] => oscPan[i] => env[i] => lp[i] => rev;
+	osc[i] => env[i] => lp[i] => oscPan[i];
 	0.06 => osc[i].gain;
-	1 - 2 * (i / (numSynths - 1)) => oscPan[i].pan;
+	oscPan[i].left => lrev;
+	oscPan[i].right => rrev;
+	0.75 - 1.5 * (i $ float / (numSynths - 1)) => oscPan[i].pan;
+	<<<oscPan[i].pan()>>>;
 	400::ms => env[i].attackTime;
 	60::ms => env[i].decayTime;
 	0.8 => env[i].sustainLevel;
 	1000::ms => env[i].releaseTime;
-	2 => lp[i].Q;
+	3 => lp[i].Q;
 	Math.random2f(200, 500) => lfoDepth[i];
-	Math.random2f(2000, 5000) => lfoSpeed[i];
+	Math.random2f(80, 200) => lfoSpeed[i];
 }
 
 spork ~ chordLfo();
 spork ~ oscGetChord();
 int sameNote;
+float synthNote;
 
-0.4 => dac.gain;
+1 => dac.gain;
 
 while(true){
-	if(Math.randomf() > 0.7){
-		do{
-			60 + key + chordNotes[type][root][Math.random2(0, chordNotes[type][root].cap() - 1)] => Std.mtof => osc[activeSynth].freq;
-			0 => int sameNote;
+	if(Math.randomf() > 0.4){
+		1 => int sameNote;
+		while(sameNote > 0){
+			60 + key + chordNotes[type][root][Math.random2(0, chordNotes[type][root].cap() - 1)] => Std.mtof => synthNote;
+			<<<"Tried to make note: ", synthNote>>>;
+			0 => sameNote;
 			for(0 => int x; x < numSynths; x++){
-				if(osc[x].freq() <= osc[activeSynth].freq() + detune && osc[x].freq() >= osc[activeSynth].freq() - detune){
+				if(synthNote < osc[x].freq() + noteDistance && synthNote > osc[x].freq() - noteDistance){
 					sameNote++;
 				}
 			}
-		} while(sameNote > 1);
-		osc[activeSynth].freq() + Math.random2f(-1 * detune, detune) => osc[activeSynth].freq;
+		}
+		synthNote + Math.random2f(-1 * detune, detune) => osc[activeSynth].freq;
 		env[activeSynth].keyOn(1);
+		<<<"Made note: ", osc[activeSynth].freq()>>>;
 		activeSynth++;
 		if(activeSynth == numSynths){
 			0 => activeSynth;
 		}
 		env[activeSynth].keyOff(1);
 	}
-	Math.random2(400, 600)::ms => now;
+	Math.random2(1500, 2000)::ms => now;
 }
