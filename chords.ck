@@ -5,26 +5,26 @@ recv.event( "/key/root/type, i i i" ) @=> OscEvent @ oe;
 
 // key is an integer MIDI note value (e.g., C is 0, C# is 1, etc.)
 // root is an integer MIDI note value (e.g., C is 0, C# is 1, etc.)
-// type is an integer (0 = major, 1 = minor)
+// type is an integer (0 = major, 1 = minor, 2=dim, 3=aug, 4=sus4, 5=dom7)
 
 
 0 => int key;
 0 => int root;
 0 => int type;
-300 => int portamento;
+400 => int portamento;
 3 => int detune;
 4 => int numSynths;
 0 => int activeSynth;
 0 => int lfoTime;
 30 => int noteDistance;
-[ [ [0, 2, 4, 5, 7, 9, 11, 12],
+[ [ [0, 2, 4, 7, 12],
     [1, 5, 8, 13],
-    [0, 2, 4, 6, 9, 12, 14],
+    [0, 2, 4, 9, 12, 14],
     [3, 7, 10, 15],
     [2, 4, 8, 9, 11, 16],
     [0, 5, 7, 9, 12, 14],
     [4, 6, 10, 13],
-    [2, 6, 7, 9, 11, 12, 14],
+    [2, 7, 9, 11, 14],
     [0, 3, 8, 12, 15],
     [4, 7, 9, 13, 14, 16],
     [2, 5, 9, 10, 12, 14],
@@ -40,13 +40,45 @@ recv.event( "/key/root/type, i i i" ) @=> OscEvent @ oe;
     [0, 3, 8, 11, 15],
     [4, 7, 9, 11, 12, 14, 16],
     [5, 9, 10, 12, 13],
-    [-1, 6, 9, 11, 14] ] ] @=> int chordNotes[][][];
+    [-1, 6, 9, 11, 14] ],
+  [ [0] ],
+  [ [0] ],
+  [ [0, 2, 5, 7, 9, 12],
+    [1, 5, 8, 13],
+    [2, 4, 6, 9, 12, 14],
+    [3, 7, 10, 15],
+    [2, 4, 8, 9, 11, 16],
+    [0, 5, 7, 9, 12, 14],
+    [4, 6, 10, 13],
+    [2, 7, 9, 11, 14],
+    [0, 3, 8, 12, 15],
+    [4, 7, 9, 13, 14, 16],
+    [2, 5, 9, 10, 12, 14],
+    [-1, 6, 11, 15] ],
+  [ [0, 4, 7, 10, 12],
+    [1, 5, 8, 13],
+    [2, 4, 6, 9, 12, 14],
+    [3, 7, 10, 15],
+    [2, 4, 8, 9, 11, 16],
+    [0, 5, 7, 9, 12, 14],
+    [4, 6, 10, 13],
+    [2, 5, 7, 11, 12, 14],
+    [0, 3, 8, 12, 15],
+    [4, 7, 9, 13, 14, 16],
+    [2, 5, 9, 10, 12, 14],
+    [-1, 6, 11, 15] ] ] @=> int chordNotes[][][];
 
 TriOsc bassTone => NRev bassRev => LPF bassLp => dac;
 0.1 => bassTone.gain;
 500 => bassLp.freq;
 0.2 => bassRev.mix;
 3 => bassLp.Q;
+
+TriOsc fifthTone => NRev fifthRev => LPF fifthLp => dac;
+0.07 => fifthTone.gain;
+600 => fifthLp.freq;
+0.15 => fifthRev.mix;
+3 => fifthLp.Q;
 
 PRCRev lrev;
 LPF lmasterLP;
@@ -68,11 +100,13 @@ LPF lp[numSynths];
 Pan2 oscPan[numSynths];
 float lfoSpeed[numSynths];
 float lfoDepth[numSynths];
+float fifthNote;
 
 fun void oscGetChord(){
 	while(true){
 		oe => now;
 		while(oe.nextMsg()){
+			<<<"osc recieved">>>;
 			oe.getInt() % 12 => key;
 			oe.getInt() % 12 => root;
 			oe.getInt() => type;
@@ -80,6 +114,8 @@ fun void oscGetChord(){
 			root + 36 + key => Std.mtof => float destFreq;
 			for(0 => int x; x < portamento; x++){
 				currentFreq + ((destFreq - currentFreq) * x / portamento) => bassTone.freq;
+				bassTone.freq() => Std.ftom => fifthNote;
+				fifthNote + 7 => Std.mtof => fifthTone.freq;
 				1::ms => now;
 			}
 		}
@@ -107,6 +143,7 @@ for(0 => int i; i < numSynths; i++){
 	60::ms => env[i].decayTime;
 	0.8 => env[i].sustainLevel;
 	1000::ms => env[i].releaseTime;
+	800 => lp[i].freq;
 	3 => lp[i].Q;
 	Math.random2f(200, 500) => lfoDepth[i];
 	Math.random2f(80, 200) => lfoSpeed[i];

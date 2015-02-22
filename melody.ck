@@ -17,7 +17,7 @@ for(0 => int x; x < numSynths; x++){
     s[x] => e[x] => lp[x] => p[x];
     p[x].left => lrev;
     p[x].right => rrev;
-    0.1 => s[x].gain;
+    0.06 => s[x].gain;
     3::ms => e[x].attackTime;
     60::ms => e[x].decayTime;
     0.2 => e[x].sustainLevel;
@@ -36,6 +36,7 @@ while(true){
     while(oe.nextMsg()){
         oe.getInt() => Std.mtof => s[x % numSynths].freq;
         oe.getFloat() => timbre;
+        <<<timbre>>>;
         timbre * 5000 + 1600 => lp[x % numSynths].freq;
         Math.sin(timbre * 16931) => p[x % numSynths].pan;
         ((Math.sin(timbre * 13063) + 1.5) * 400)::ms => e[x % numSynths].decayTime;
