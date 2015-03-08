@@ -2,8 +2,11 @@ OscRecv recv;
 6449 => recv.port;
 recv.listen();
 recv.event( "/key/root/type, i i i" ) @=> OscEvent @ oe;
-recv.event( "/note/timbre, i f" ) @=> OscEvent @ om;
 
+OscRecv recv2;
+6450 => recv2.port;
+recv2.listen();
+recv2.event( "/id/timbre/lifetime/n1/n2/n3/n4/n5/n6/n7/n8, s f i i i i i i i i i" ) @=> OscEvent @ om;
 // key is an integer MIDI note value (e.g., C is 0, C# is 1, etc.)
 // root is an integer MIDI note value (e.g., C is 0, C# is 1, etc.)
 // type is an integer (0 = major, 1 = minor, 2=dim, 3=aug, 4=sus4, 5=dom7)
@@ -16,10 +19,12 @@ recv.event( "/note/timbre, i f" ) @=> OscEvent @ om;
 3 => int detune;
 4 => int numSynths;
 0 => int activeSynth;
+0 => int activeMelSynth;
 0 => int lfoTime;
 30 => int noteDistance;
-4 => int numMelSynths;
+10 => int numMelSynths;
 float timbre;
+"" => string activeid;
 [ [ [0, 2, 4, 7, 12],
 	[1, 5, 8, 13],
 	[0, 2, 4, 9, 12, 14],
@@ -104,9 +109,9 @@ LPF rmasterLP;
 rrev => rmasterLP => dac.right;
 
 NRev lmelrev => dac.left;
-0.08 => lmelrev.mix;
+0.3 => lmelrev.mix;
 NRev rmelrev => dac.right;
-0.08 => rmelrev.mix;
+0.3 => rmelrev.mix;
 
 SawOsc osc[numSynths];
 ADSR env[numSynths];
@@ -119,6 +124,8 @@ ADSR e[numMelSynths];
 Pan2 p[numMelSynths];
 LPF lpm[numMelSynths];
 float fifthNote;
+int note;
+int lifetime;
 
 fun void oscGetChord(){
 	while(true){
@@ -142,22 +149,48 @@ fun void oscGetChord(){
 }
 
 fun void oscGetMelody(){
-	0 => int x;
+	string id;
 	while(true){
 		om => now;
 		while(om.nextMsg()){
 			<<<"reiceved osc">>>;
-			84 + (om.getInt() + key) % 12 => Std.mtof => s[x % numSynths].freq;
-			om.getFloat() => timbre;
-			<<<timbre>>>;
-			timbre * 5000 + 1600 => lpm[x % numSynths].freq;
-			Math.sin(timbre * 16931) => p[x % numSynths].pan;
-			((Math.sin(timbre * 13063) + 1.5) * 400)::ms => e[x % numSynths].decayTime;
-			e[x % numSynths].keyOn();
-			1 +=> x;
-			e[x % numSynths].keyOff();
+			int notes[8];
+			om.getString() => id;
+			if(id != activeid){
+				id => activeid;
+				<<<activeid>>>;
+				om.getFloat() => timbre;
+				om.getInt() * 4 => lifetime;
+				for(0 => int x; x < notes.cap(); x++){
+					om.getInt() => notes[x];
+				}
+				spork ~ melody(notes, timbre, Math.random2(270, 500)::ms, lifetime);
+			}
 		}
 	}
+}
+
+fun void melody(int notes[], float timbre, dur notedel, int beats){
+	for(0 => int x; x < beats; x++){
+		if(true){
+			spork ~ makeMelody(notes[x % 8], timbre, 1 - Math.pow(x $ float / beats $ float, 2));
+		}
+		notedel => now;
+	}
+}
+
+fun void makeMelody(int note, float timbre, float gain){
+	84 + (note + key) % 12 => Std.mtof => s[activeMelSynth % numSynths].freq;
+	gain * 0.03 => s[activeMelSynth % numSynths].gain;
+	timbre * 5000 + 1600 => lpm[activeMelSynth % numSynths].freq;
+	Math.sin(timbre * 16931) => p[activeMelSynth % numSynths].pan;
+	((Math.sin(timbre * 13063) + 1.5) * 400)::ms => e[activeMelSynth % numSynths].decayTime;
+	e[activeMelSynth % numSynths].keyOn();
+	activeMelSynth => int capNote;
+	1 +=> activeMelSynth;
+	e[activeMelSynth % numSynths].keyOff();
+	3000::ms => now;
+	e[capNote % numSynths].keyOff();
 }
 
 fun void chordLfo(){
@@ -191,11 +224,11 @@ for(0 => int x; x < numMelSynths; x++){
     s[x] => e[x] => lpm[x] => p[x];
     p[x].left => lmelrev;
     p[x].right => rmelrev;
-    0.05 => s[x].gain;
+    0.03 => s[x].gain;
     3::ms => e[x].attackTime;
     60::ms => e[x].decayTime;
     0.2 => e[x].sustainLevel;
-    100::ms => e[x].releaseTime;
+    400::ms => e[x].releaseTime;
     2 => lpm[x].Q;
 }
 
