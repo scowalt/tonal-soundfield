@@ -288,7 +288,7 @@ spork ~ drumPlay();
 int sameNote;
 float synthNote;
 
-0.3 => dac.gain;
+0.18 => dac.gain;
 
 while(true){
 	if(Math.randomf() > 0.4){
