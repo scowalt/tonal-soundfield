@@ -23,7 +23,7 @@ for(0 => int x; x < 2; x++){
 
 dn[0] => dac.left;
 dn[1] => dac.right;
-2 => dac.gain;
+0.34 => dac.gain;
 
 SinOsc low => dac;
 0.2 => low.gain;

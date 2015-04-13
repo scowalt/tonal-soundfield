@@ -230,7 +230,7 @@ class Node
 //runing code starts here
 OscSend send;
 "localhost" => string hostname;
-6449 => int port;
+6450 => int port;
 send.setHost(hostname,port);
 Chord current;
 Chord I;
@@ -259,22 +259,22 @@ ii7.init(2,6,[I,V],[[0.3,0.7],[0.3,0.7]]);
 iii.init(4,1,[V,IV,vi],[[0.4,0.4,0.2],[0.2,0.3,0.5]]);
 III.init(4,0,[IV,vi,iv],[[0.5,0.3,0.2],[0.2,0.6,0.2]]);
 IV.init(5,0,[I,V,V7,III,bv7],[[0.3,0.3,0.2,0.1,0.1],[0.2,0.4,0.1,0.2,0.1]]);
-iv.init(5,1,[VI,V,vi],[[0.3,0.4,0.3],[0.2,0.4,0.4]]);
+iv.init(5,1,[IV,V,vi],[[0.3,0.4,0.3],[0.2,0.4,0.4]]);
 bv7.init(6,6,[V],[[1.0],[1.0]]);
 V.init(7,0,[I,vi,ii,iii,Isus4,V7],[[0.2,0.2,0.1,0.2,0.1,0.2],[0.2,0.1,0.1,0.2,0.2,0.2]]);
 V7.init(7,5,[I,vi],[[0.8,0.2],[0.4,0.6]]);
 vi.init(9,1,[I,ii,iii,IV,V,IIdim],[[0.2,0.2,0.1,0.3,0.1,0.1],[0.2,0.2,0.2,0.2,0.1,0.1]]);
 Isus4.init(0,4,[I],[[1.0],[1.0]]);
 VIsus4.init(9,4,[vi],[[1.0],[1.0]]);
-VI.init(9,0,[VI],[[1.0],[1.0]]);
+VI.init(9,0,[VI,ii],[[0.1,0.9],[0.1,0.9]]);
 III.setModulation([[VIsus4]],[-3],[I]);
 I.setModulation([[VI],[I7],[VI]],[2,5,7],[I,I,V]);
 Rhodey  instruments[4];
 IntList beats;
 IntList keys;
 LinkedList chords;
-chords.offer(IV);
-keys.offer(3);
+chords.offer(I);
+keys.offer(0);
 beats.offer(4);
 0=>int rhythmCounter;
 fun void generateChords()
@@ -336,9 +336,15 @@ fun void generateBeats()
     }
 }
 
+fun void sendKey(){
+	send.startMsg("/key", "i");
+    keys.poll() => send.addInt;
+	50::ms => now;
+}
+
 for (0=>int i; i < instruments.cap(); i++)
 {
-    instruments[i]=>dac;
+    //instruments[i]=>dac;
 }
 
 fun void playChord(Chord current, int key, int beat)
@@ -359,7 +365,7 @@ fun void playChord(Chord current, int key, int beat)
     <<< "Beats Played: ", beat>>>;
     for (0=>int j;j<beat;j++)
     {
-        0.5::second=>now;
+        Math.random2f(1,2)::second=>now;
         float dyn;
         if (rhythmCounter == 0)
             0.2=>dyn;
@@ -381,6 +387,9 @@ fun void playChord(Chord current, int key, int beat)
         (rhythmCounter+1)%4=>rhythmCounter;
     }
 }
+
+spork ~ sendKey();
+
 while (true)
 {
     if (chords.size<5)
